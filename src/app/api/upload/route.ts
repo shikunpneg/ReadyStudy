@@ -82,6 +82,17 @@ export async function POST(req: Request) {
     }
 
     await db.update(materials).set({ status: 'ready' }).where(eq(materials.id, mat.id));
+
+    // 4) 触发预生成 50 道核心题（不阻塞上传返回）
+    (async () => {
+      try {
+        const { preGenerateCoreQuestions } = await import('@/lib/jobs');
+        await preGenerateCoreQuestions(userId, mat.id);
+      } catch (e) {
+        console.error('[pre-generate] failed', e);
+      }
+    })();
+
     return NextResponse.json({ ok: true, materialId: mat.id });
   } catch (e) {
     await db
