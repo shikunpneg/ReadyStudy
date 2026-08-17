@@ -1,0 +1,77 @@
+name: Bug Report 报告 Bug
+description: 报告一个具体问题
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      content: |
+        感谢你提 bug！请尽可能详细描述，方便我们快速定位。
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重程度
+      options:
+        - 致命（无法登录/上传/答题）
+        - 严重（部分功能不可用）
+        - 一般（有 workaround）
+        - 轻微（UI / 文案）
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: v0.2.0
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 访问 ...
+        2. 点击 ...
+        3. 输入 ...
+        4. 看到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 截图 / 报错日志
+      placeholder: |
+        ```
+        浏览器控制台 / Vercel Function Logs 内容
+        ```
+    validations:
+      required: false
+
+  - type: dropdown
+    id: env
+    attributes:
+      label: 部署环境
+      options:
+        - Vercel 生产
+        - Vercel 预览
+        - 本地 dev
+        - 本地 build
+    validations:
+      required: true

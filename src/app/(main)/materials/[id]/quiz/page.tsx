@@ -53,7 +53,18 @@ export default async function QuizPage({ params }: { params: Promise<{ id: strin
           </Link>
         </div>
       </div>
-      <QuizClient questions={list} materialId={id} />
+      <QuizClient
+        questions={list.map((q) => ({
+          id: q.id,
+          type: q.type,
+          difficulty: q.difficulty,
+          content: q.content,
+          options: (q.options ?? null) as Record<string, string> | null,
+          answer: q.answer,
+          explanation: q.explanation,
+        }))}
+        materialId={id}
+      />
     </div>
   );
 }

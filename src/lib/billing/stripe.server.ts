@@ -10,12 +10,11 @@ export function getStripe(): Stripe {
   if (_stripe) return _stripe;
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) {
-    throw new Error(
-      'STRIPE_SECRET_KEY 未配置。付费功能尚未启用，请忽略此错误。',
-    );
+    throw new Error('STRIPE_SECRET_KEY 未配置。付费功能尚未启用，请忽略此错误。');
   }
   _stripe = new Stripe(key, {
-    apiVersion: '2024-10-28.acacia',
+    // SDK 内置类型 '2025-02-24.acacia' 与版本绑定，这里 cast 兼容旧版字符串
+    apiVersion: '2024-10-28.acacia' as Stripe.LatestApiVersion,
     typescript: true,
   });
   return _stripe;
@@ -44,10 +43,7 @@ export async function createCheckoutSession(opts: {
   });
 }
 
-export async function createCustomerPortal(opts: {
-  customerId: string;
-  returnUrl: string;
-}) {
+export async function createCustomerPortal(opts: { customerId: string; returnUrl: string }) {
   const stripe = getStripe();
   return stripe.billingPortal.sessions.create({
     customer: opts.customerId,

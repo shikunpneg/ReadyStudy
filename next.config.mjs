@@ -1,10 +1,9 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: '50mb', // 文件上传
+      bodySizeLimit: '50mb',
     },
   },
   images: {
