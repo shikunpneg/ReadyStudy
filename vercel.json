@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "functions": {
+    "src/app/api/upload/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/quiz/generate/route.ts": {
+      "maxDuration": 120,
+      "memory": 1024
+    },
+    "src/app/api/mindmap/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
+}
