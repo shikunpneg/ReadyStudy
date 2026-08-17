@@ -1,0 +1,11 @@
+# <type>(<scope>): <subject>  — 中文 / 英文均可，subject 不超过 72 字符
+#
+# type: feat | fix | docs | style | refactor | perf | test | chore | build | ci
+# scope: auth | upload | quiz | mindmap | dashboard | ui | db | ai | deps
+#
+# 示例：
+# feat(quiz): 新增填空题答题组件
+# fix(upload): 修复大 PDF 切片越界问题
+#
+# Body 详细说明（可选）
+# Footer（可选）：Refs #issue / BREAKING CHANGE
