@@ -1,0 +1,105 @@
+/**
+ * ⚠️ 已禁用。启用付费时移除 .disabled 后缀，并将目录移至 src/app/(main)/billing/。
+ *
+ * 价格页（公开页面，登录前后都能看）
+ */
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PLAN_LIMITS } from '@/lib/billing';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { CheckoutButton } from './checkout-button';
+
+export default async function BillingPage() {
+  const session = await auth();
+  const userId = (session?.user as { id: string } | undefined)?.id;
+  let currentPlan: 'free' | 'pro' = 'free';
+  if (userId) {
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    currentPlan = (u?.plan as 'free' | 'pro') ?? 'free';
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-semibold">选择适合你的方案</h1>
+        <p className="mt-2 text-muted-foreground">随时升级或取消，按月计费</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <PricingCard
+          plan="free"
+          current={currentPlan === 'free'}
+          features={[
+            `最多 ${PLAN_LIMITS.free.maxMaterials} 份资料`,
+            `每月 ${PLAN_LIMITS.free.maxQuestionsPerMonth} 道题`,
+            `支持格式：${PLAN_LIMITS.free.features.join(', ').toUpperCase()}`,
+            '基础出题与阅读',
+          ]}
+        />
+        <PricingCard
+          plan="pro"
+          current={currentPlan === 'pro'}
+          highlighted
+          features={[
+            '不限资料数',
+            '不限出题数',
+            `支持所有格式：${PLAN_LIMITS.pro.features.join(', ').toUpperCase()}`,
+            '优先 LLM 响应',
+            '高级题型与自定义 Prompt',
+            '邮件支持',
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PricingCard({
+  plan,
+  current,
+  highlighted,
+  features,
+}: {
+  plan: 'free' | 'pro';
+  current: boolean;
+  highlighted?: boolean;
+  features: string[];
+}) {
+  const isPro = plan === 'pro';
+  return (
+    <Card className={highlighted ? 'border-primary' : ''}>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          {PLAN_LIMITS[plan].label}
+          {highlighted && (
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+              推荐
+            </span>
+          )}
+        </CardTitle>
+        <CardDescription>{isPro ? '¥29 / 月' : '免费'}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ul className="space-y-1 text-sm">
+          {features.map((f) => (
+            <li key={f}>✓ {f}</li>
+          ))}
+        </ul>
+        {current ? (
+          <Button disabled variant="outline" className="w-full">
+            当前方案
+          </Button>
+        ) : isPro ? (
+          <CheckoutButton />
+        ) : (
+          <Button disabled variant="outline" className="w-full">
+            免费使用
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
