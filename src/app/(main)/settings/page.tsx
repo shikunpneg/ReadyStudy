@@ -1,0 +1,37 @@
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { userSettings } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { SettingsForm } from './form';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+export default async function SettingsPage() {
+  const session = await auth();
+  const userId = (session!.user as { id: string }).id;
+  const [s] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-4">
+      <h1 className="text-2xl font-semibold">设置</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI 模型（BYOK）</CardTitle>
+          <CardDescription>
+            您的 API Key 会被 AES-256-GCM 加密后存储，仅在出题/embedding 时使用。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettingsForm
+            defaultValues={{
+              llmProvider: (s?.llmProvider as 'deepseek' | 'openai') ?? 'deepseek',
+              modelName: s?.modelName ?? 'deepseek-chat',
+              embedModelName: s?.embedModelName ?? 'text-embedding-3-small',
+              hasKey: Boolean(s?.encryptedApiKey),
+            }}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
