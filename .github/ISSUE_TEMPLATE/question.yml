@@ -1,0 +1,17 @@
+name: Question 提问
+description: 关于使用或开发的问题
+labels: ['question']
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 上下文（已尝试的方法、相关文档链接等）
+    validations:
+      required: false

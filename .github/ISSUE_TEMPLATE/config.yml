@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 用户手册
+    url: https://github.com/shikunpneg/ReadyStudy/blob/main/USER_GUIDE.md
+    about: 完整使用文档
+  - name: 部署文档
+    url: https://github.com/shikunpneg/ReadyStudy/blob/main/DEPLOY.md
+    about: 如何部署到 Vercel
