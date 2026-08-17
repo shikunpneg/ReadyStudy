@@ -43,3 +43,12 @@ drizzle/.snapshot/
 
 # Husky
 .husky/_
+.vercel
+.env*
+
+# pnpm
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Next.js trace
+next-env.d.ts

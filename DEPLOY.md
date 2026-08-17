@@ -78,3 +78,6 @@ A: 用户需登录后在 `/settings` 填入自己的 DeepSeek 或 OpenAI Key。
 
 ### Q: 部署区域？
 A: `vercel.json` 已配置 Singapore（`sin1`），对中国大陆用户更友好。
+
+### Q: 构建报 `ENOENT ./test/data/05-versions-space.pdf`？
+A: 这是 `pdf-parse@1.1.1` 的已知 bug。本项目已使用 fork 包 `pdf-parse-debugging-disabled`（`isDebugMode` 硬编码为 `false`），不会触发该问题。如自己 fork 后遇到，删除 `pdf-parse` 改用 `pdf-parse-debugging-disabled` 即可，API 完全兼容。
