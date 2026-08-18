@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -9,8 +10,8 @@ import { formatBytes, formatDate } from '@/lib/utils';
 import { Plus } from 'lucide-react';
 
 export default async function MaterialsPage() {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const list = await db
     .select()
     .from(materials)

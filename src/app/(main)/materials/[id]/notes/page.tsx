@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, notes } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -6,8 +7,8 @@ import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default async function NotesPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const { id } = await params;
 
   const [mat] = await db.select().from(materials).where(eq(materials.id, id));

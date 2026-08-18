@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { questions, materials } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -14,8 +15,8 @@ export default async function SingleQuestionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const { id } = await params;
 
   const [q] = await db.select().from(questions).where(eq(questions.id, id));

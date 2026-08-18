@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, questions } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -9,8 +10,8 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export default async function QuizPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const { id } = await params;
 
   const [mat] = await db.select().from(materials).where(eq(materials.id, id));

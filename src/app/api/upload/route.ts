@@ -10,15 +10,48 @@ import { eq } from 'drizzle-orm';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+// Vercel Hobby plan API route body 上限 4.5MB，留点余地给 multipart 边界
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
-  const form = await req.formData();
+  // Content-Length 头提前校验（Vercel 平台本身的 413 在 formData() 之前抛出，
+  // 这里捕获后给用户友好提示）
+  const contentLength = Number(req.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_FILE_BYTES * 1.5) {
+    return NextResponse.json(
+      {
+        error: `请求过大（${Math.round(contentLength / 1024 / 1024)}MB），请将文件压缩到 4MB 以内再上传。`,
+      },
+      { status: 413 },
+    );
+  }
+
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch (e) {
+    return NextResponse.json(
+      { error: `上传失败：${(e as Error).message}（通常是文件超过 4MB 限制，请先压缩）` },
+      { status: 413 },
+    );
+  }
+
   const file = form.get('file') as File | null;
   const title = (form.get('title') as string) || file?.name;
   if (!file) return NextResponse.json({ error: 'no file' }, { status: 400 });
+
+  if (file.size > MAX_FILE_BYTES) {
+    return NextResponse.json(
+      {
+        error: `文件 ${Math.round(file.size / 1024 / 1024)}MB 超过 4MB 限制，请用 ilovepdf.com 压缩后重新上传。`,
+      },
+      { status: 413 },
+    );
+  }
 
   const type = detectType(file.name);
   if (!type) return NextResponse.json({ error: 'unsupported file type' }, { status: 400 });

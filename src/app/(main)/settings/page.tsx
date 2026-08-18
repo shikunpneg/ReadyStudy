@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { userSettings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -8,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 type Provider = 'deepseek' | 'openai' | 'custom';
 
 export default async function SettingsPage() {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const [s] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
 
   return (

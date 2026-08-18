@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, questions, attempts } from '@/lib/db/schema';
 import { eq, sql, desc } from 'drizzle-orm';
@@ -10,8 +10,8 @@ import { QUESTION_TYPE_LABEL } from '@/lib/ai/prompts';
 import type { QuestionType } from '@/lib/db/schema';
 
 export default async function QuizIndexPage() {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
 
   // 所有资料 + 各资料题数
   const rows = await db

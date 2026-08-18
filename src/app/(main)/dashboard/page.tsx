@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { getDashboardStats } from '@/lib/stats';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendChart } from './trend-chart';
@@ -7,8 +8,8 @@ import type { QuestionType } from '@/lib/db/schema';
 import { QUESTION_TYPE_LABEL } from '@/lib/ai/prompts';
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const s = await getDashboardStats(userId);
 
   const radarData = s.byType.map((r) => ({

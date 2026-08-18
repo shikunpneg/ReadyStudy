@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, chunks, notes } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -7,8 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ReaderClient } from './client';
 
 export default async function ReadPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  const userId = (session!.user as { id: string }).id;
+  const user = await requireUser();
+  const userId = user.id;
   const { id } = await params;
 
   const [mat] = await db.select().from(materials).where(eq(materials.id, id));
