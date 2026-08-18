@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { materials, chunks, userSettings } from '@/lib/db/schema';
 import { parseDocument, detectType, chunkText } from '@/lib/parsers';
+import { compressPdf } from '@/lib/pdf-compress';
 import { getEmbedder } from '@/lib/ai/embed';
 import { putVector } from '@/lib/vector';
 import { eq } from 'drizzle-orm';
@@ -18,8 +19,7 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
-  // Content-Length 头提前校验（Vercel 平台本身的 413 在 formData() 之前抛出，
-  // 这里捕获后给用户友好提示）
+  // Content-Length 头提前校验（Vercel 平台本身的 413 在 formData() 之前抛出）
   const contentLength = Number(req.headers.get('content-length') ?? 0);
   if (contentLength > MAX_FILE_BYTES * 1.5) {
     return NextResponse.json(
@@ -44,38 +44,67 @@ export async function POST(req: Request) {
   const title = (form.get('title') as string) || file?.name;
   if (!file) return NextResponse.json({ error: 'no file' }, { status: 400 });
 
-  if (file.size > MAX_FILE_BYTES) {
+  const type = detectType(file.name);
+  if (!type) {
     return NextResponse.json(
       {
-        error: `文件 ${Math.round(file.size / 1024 / 1024)}MB 超过 4MB 限制，请用 ilovepdf.com 压缩后重新上传。`,
+        error: `不支持的文件类型。已支持：PDF / TXT / Markdown / PPTX / DOCX / EPUB / MOBI / AZW3`,
+      },
+      { status: 400 },
+    );
+  }
+
+  // 1. PDF 自动服务端压缩（解决 4MB 限制）
+  let fileBytes = Buffer.from(await file.arrayBuffer());
+  const originalSize = fileBytes.length;
+  let compressed = false;
+  if (type === 'pdf' && fileBytes.length > MAX_FILE_BYTES) {
+    try {
+      const compressedBytes = await compressPdf(fileBytes);
+      if (compressedBytes.length < fileBytes.length) {
+        fileBytes = Buffer.from(compressedBytes);
+        compressed = true;
+        console.log(
+          `[upload] PDF compressed: ${(originalSize / 1024 / 1024).toFixed(1)}MB -> ${(fileBytes.length / 1024 / 1024).toFixed(1)}MB`,
+        );
+      }
+    } catch (e) {
+      console.warn('[upload] PDF compression failed:', (e as Error).message);
+    }
+  }
+
+  // 压缩后仍超限才报错
+  if (fileBytes.length > MAX_FILE_BYTES) {
+    return NextResponse.json(
+      {
+        error: `文件 ${Math.round(fileBytes.length / 1024 / 1024)}MB 超过 4MB 限制${compressed ? '（已尝试服务端压缩，仍超限）' : ''}。建议：① 移除 PDF 中的大图片后重新导出；② 用 ilovepdf.com 压缩；③ 改为上传 TXT/Markdown。`,
       },
       { status: 413 },
     );
   }
 
-  const type = detectType(file.name);
-  if (!type) return NextResponse.json({ error: 'unsupported file type' }, { status: 400 });
-
-  // 1. 落库（不存原始文件到 Blob，只存解析后的文本 chunks）
+  // 2. 落库
   const [mat] = await db
     .insert(materials)
     .values({
       userId,
       title: title || file.name,
       type,
-      blobUrl: '', // 已改为不依赖 Blob 存储
-      sizeBytes: file.size,
+      blobUrl: '',
+      sizeBytes: originalSize, // 记录原始大小
       status: 'processing',
     })
     .returning();
 
-  // 2. 解析 + 切片 + 向量化
+  // 3. 解析 + 切片 + 向量化
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const text = await parseDocument(buf, type);
+    const text = await parseDocument(fileBytes, type);
     const chunkList = chunkText(text);
 
-    // 拿用户设置（BYOK）
+    if (chunkList.length === 0) {
+      throw new Error('文档解析为空，可能是不支持的格式或加密文档');
+    }
+
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
     const apiKey = settings?.encryptedApiKey
       ? (await import('@/lib/crypto')).decryptApiKey(settings.encryptedApiKey)
@@ -87,7 +116,7 @@ export async function POST(req: Request) {
       baseUrl: settings?.baseUrl ?? null,
     });
 
-    // 批量 embedding（每次最多 32 条以免超额）
+    // 批量 embedding
     for (let i = 0; i < chunkList.length; i += 32) {
       const batch = chunkList.slice(i, i + 32);
       const embeddings = await embed.embed(batch.map((c) => c.content));
@@ -109,7 +138,7 @@ export async function POST(req: Request) {
 
     await db.update(materials).set({ status: 'ready' }).where(eq(materials.id, mat.id));
 
-    // 3) 触发预生成 50 道核心题（不阻塞上传返回）
+    // 4) 触发预生成 50 道核心题
     (async () => {
       try {
         const { preGenerateCoreQuestions } = await import('@/lib/jobs');
@@ -119,7 +148,14 @@ export async function POST(req: Request) {
       }
     })();
 
-    return NextResponse.json({ ok: true, materialId: mat.id });
+    return NextResponse.json({
+      ok: true,
+      materialId: mat.id,
+      compressed,
+      originalSizeMB: +(originalSize / 1024 / 1024).toFixed(2),
+      finalSizeMB: +(fileBytes.length / 1024 / 1024).toFixed(2),
+      chunkCount: chunkList.length,
+    });
   } catch (e) {
     await db
       .update(materials)

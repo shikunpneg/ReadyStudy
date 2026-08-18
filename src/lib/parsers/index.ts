@@ -1,13 +1,15 @@
 /**
  * 文档解析器统一入口。
- * 支持：pdf / txt / pptx / docx
+ * 支持：pdf / txt / pptx / docx / epub / mobi
  */
 import { parsePdf } from './pdf';
 import { parseTxt } from './txt';
 import { parsePptx } from './pptx';
 import { parseDocx } from './docx';
+import { parseEpub } from './epub';
+import { parseMobi } from './mobi';
 
-export type SupportedType = 'pdf' | 'txt' | 'pptx' | 'docx';
+export type SupportedType = 'pdf' | 'txt' | 'pptx' | 'docx' | 'epub' | 'mobi';
 
 export async function parseDocument(buffer: Buffer, type: SupportedType): Promise<string> {
   switch (type) {
@@ -19,6 +21,10 @@ export async function parseDocument(buffer: Buffer, type: SupportedType): Promis
       return parsePptx(buffer);
     case 'docx':
       return parseDocx(buffer);
+    case 'epub':
+      return parseEpub(buffer);
+    case 'mobi':
+      return parseMobi(buffer);
     default:
       throw new Error(`Unsupported type: ${type}`);
   }
@@ -30,6 +36,8 @@ export function detectType(filename: string): SupportedType | null {
   if (ext === 'txt' || ext === 'md') return 'txt';
   if (ext === 'pptx' || ext === 'ppt') return 'pptx';
   if (ext === 'docx' || ext === 'doc') return 'docx';
+  if (ext === 'epub') return 'epub';
+  if (ext === 'mobi' || ext === 'azw' || ext === 'azw3' || ext === 'prc') return 'mobi';
   return null;
 }
 
