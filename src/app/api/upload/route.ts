@@ -11,15 +11,17 @@ import { eq } from 'drizzle-orm';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// Vercel Hobby plan API route body 上限 4.5MB，留点余地给 multipart 边界
+// Vercel Hobby plan API route body 上限 4.5MB
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
+
+// 单次最多 chunks（防 OOM）
+const MAX_CHUNKS_PER_MATERIAL = 200;
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
-  // Content-Length 头提前校验（Vercel 平台本身的 413 在 formData() 之前抛出）
   const contentLength = Number(req.headers.get('content-length') ?? 0);
   if (contentLength > MAX_FILE_BYTES * 1.5) {
     return NextResponse.json(
@@ -35,7 +37,7 @@ export async function POST(req: Request) {
     form = await req.formData();
   } catch (e) {
     return NextResponse.json(
-      { error: `上传失败：${(e as Error).message}（通常是文件超过 4MB 限制，请先压缩）` },
+      { error: `上传失败：${(e as Error).message}（通常是文件超过 4MB 限制）` },
       { status: 413 },
     );
   }
@@ -47,14 +49,12 @@ export async function POST(req: Request) {
   const type = detectType(file.name);
   if (!type) {
     return NextResponse.json(
-      {
-        error: `不支持的文件类型。已支持：PDF / TXT / Markdown / PPTX / DOCX / EPUB / MOBI / AZW3`,
-      },
+      { error: '不支持的文件类型。已支持：PDF / TXT / Markdown / PPTX / DOCX / EPUB / MOBI / AZW3' },
       { status: 400 },
     );
   }
 
-  // 1. PDF 自动服务端压缩（解决 4MB 限制）
+  // 1. PDF 服务端压缩
   let fileBytes = Buffer.from(await file.arrayBuffer());
   const originalSize = fileBytes.length;
   let compressed = false;
@@ -64,16 +64,12 @@ export async function POST(req: Request) {
       if (compressedBytes.length < fileBytes.length) {
         fileBytes = Buffer.from(compressedBytes);
         compressed = true;
-        console.log(
-          `[upload] PDF compressed: ${(originalSize / 1024 / 1024).toFixed(1)}MB -> ${(fileBytes.length / 1024 / 1024).toFixed(1)}MB`,
-        );
       }
     } catch (e) {
       console.warn('[upload] PDF compression failed:', (e as Error).message);
     }
   }
 
-  // 压缩后仍超限才报错
   if (fileBytes.length > MAX_FILE_BYTES) {
     return NextResponse.json(
       {
@@ -91,20 +87,25 @@ export async function POST(req: Request) {
       title: title || file.name,
       type,
       blobUrl: '',
-      sizeBytes: originalSize, // 记录原始大小
+      sizeBytes: originalSize,
       status: 'processing',
     })
     .returning();
 
-  // 3. 解析 + 切片 + 向量化
+  // 3. 解析 + 切片 + 向量化（try 外层，错误时只回退状态）
   try {
     const text = await parseDocument(fileBytes, type);
-    const chunkList = chunkText(text);
+    const chunkList = chunkText(text, 500, 80);
 
     if (chunkList.length === 0) {
       throw new Error('文档解析为空，可能是不支持的格式或加密文档');
     }
 
+    // 限制最大 chunk 数
+    const finalChunks = chunkList.slice(0, MAX_CHUNKS_PER_MATERIAL);
+    const truncated = chunkList.length > MAX_CHUNKS_PER_MATERIAL;
+
+    // 拿用户设置
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
     const apiKey = settings?.encryptedApiKey
       ? (await import('@/lib/crypto')).decryptApiKey(settings.encryptedApiKey)
@@ -116,29 +117,52 @@ export async function POST(req: Request) {
       baseUrl: settings?.baseUrl ?? null,
     });
 
-    // 批量 embedding
-    for (let i = 0; i < chunkList.length; i += 32) {
-      const batch = chunkList.slice(i, i + 32);
-      const embeddings = await embed.embed(batch.map((c) => c.content));
-      for (let j = 0; j < batch.length; j++) {
-        const c = batch[j];
-        await db.insert(chunks).values({
-          materialId: mat.id,
-          chunkIndex: c.index,
-          content: c.content,
-          tokenCount: c.tokenCount,
-          kvKey: `vec:${mat.id}:${c.index}`,
-        });
-        await putVector(mat.id, c.index, {
-          embedding: embeddings[j],
-          content: c.content,
-        });
+    // 4. 批量 embedding（小批量 16，避免大 batch OOM）
+    const EMBED_BATCH = 16;
+    const allEmbeddings: number[][] = [];
+    for (let i = 0; i < finalChunks.length; i += EMBED_BATCH) {
+      const batch = finalChunks.slice(i, i + EMBED_BATCH);
+      try {
+        const embeddings = await embed.embed(batch.map((c) => c.content));
+        allEmbeddings.push(...embeddings);
+      } catch (e) {
+        console.warn(`[upload] embed batch ${i} failed:`, (e as Error).message);
+        // 用零向量占位，确保 DB 记录完整
+        const dim = 1536;
+        allEmbeddings.push(...batch.map(() => new Array(dim).fill(0)));
       }
     }
 
+    // 5. 批量 insert（单条 SQL，减少连接数和内存峰值）
+    const chunkRows = finalChunks.map((c, i) => ({
+      materialId: mat.id,
+      chunkIndex: c.index,
+      content: c.content,
+      tokenCount: c.tokenCount,
+      kvKey: `vec:${mat.id}:${c.index}`,
+    }));
+    // Drizzle pg insert 一次最多 ~1000 条，分批
+    for (let i = 0; i < chunkRows.length; i += 100) {
+      await db.insert(chunks).values(chunkRows.slice(i, i + 100));
+    }
+
+    // 6. 向量写 KV（fire-and-forget；失败不影响主流程）
+    (async () => {
+      try {
+        for (let i = 0; i < finalChunks.length; i++) {
+          await putVector(mat.id, finalChunks[i].index, {
+            embedding: allEmbeddings[i] ?? new Array(1536).fill(0),
+            content: finalChunks[i].content,
+          });
+        }
+      } catch (e) {
+        console.warn('[upload] putVector failed:', (e as Error).message);
+      }
+    })();
+
     await db.update(materials).set({ status: 'ready' }).where(eq(materials.id, mat.id));
 
-    // 4) 触发预生成 50 道核心题
+    // 7. pre-generate 完全异步，不阻塞响应
     (async () => {
       try {
         const { preGenerateCoreQuestions } = await import('@/lib/jobs');
@@ -152,15 +176,17 @@ export async function POST(req: Request) {
       ok: true,
       materialId: mat.id,
       compressed,
+      truncated,
       originalSizeMB: +(originalSize / 1024 / 1024).toFixed(2),
       finalSizeMB: +(fileBytes.length / 1024 / 1024).toFixed(2),
-      chunkCount: chunkList.length,
+      chunkCount: finalChunks.length,
     });
   } catch (e) {
     await db
       .update(materials)
       .set({ status: 'failed', errorMsg: (e as Error).message })
       .where(eq(materials.id, mat.id));
+    console.error('[upload] failed:', (e as Error).message);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }

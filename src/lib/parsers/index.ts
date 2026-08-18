@@ -41,23 +41,60 @@ export function detectType(filename: string): SupportedType | null {
   return null;
 }
 
-/**
- * 文本切片：按段落/句子优先，500 字/段，重叠 80 字。
- */
 export interface Chunk {
   index: number;
   content: string;
   tokenCount: number;
 }
 
-export function chunkText(text: string, size = 500, overlap = 80): Chunk[] {
-  const clean = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+/**
+ * 文本切片：500 字/段，重叠 80 字。
+ *
+ * 上限 `MAX_CHUNKS` 防止大文件把 Vercel 函数内存打爆（1024MB 上限）。
+ * 当切片超过上限时，按字符密度均匀采样，丢弃中间段。
+ */
+const MAX_CHUNKS = 200; // 安全上限，避免 OOM
+const DEFAULT_CHUNK_SIZE = 500;
+const DEFAULT_OVERLAP = 80;
+
+export function chunkText(
+  text: string,
+  size = DEFAULT_CHUNK_SIZE,
+  overlap = DEFAULT_OVERLAP,
+): Chunk[] {
+  // 1) 大幅净化文本，释放内存
+  let clean = text
+    .replace(/\r\n/g, '\n')
+    .replace(/[\t\f\v]+/g, ' ')
+    .replace(/[ ]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
   if (!clean) return [];
+
+  // 2) 总字符数过大切均匀采样（保留开头 + 结尾 + 中间均匀点）
+  // 经验阈值：MAX_CHUNKS * size * 1.5 ~= 150k 字符（≈ 5MB PDF 文本）
+  const totalChars = clean.length;
+  const maxSafeChars = MAX_CHUNKS * size * 1.5;
+  if (totalChars > maxSafeChars) {
+    // 均匀选 MAX_CHUNKS 段，每段 size
+    const step = Math.floor(totalChars / MAX_CHUNKS);
+    let sampled = '';
+    for (let i = 0; i < MAX_CHUNKS; i++) {
+      const start = i * step;
+      const end = Math.min(start + size, totalChars);
+      if (start >= totalChars) break;
+      sampled += clean.slice(start, end) + '\n\n';
+    }
+    clean = sampled;
+  }
+
+  // 3) 切片
   const chunks: Chunk[] = [];
   let i = 0;
   let idx = 0;
 
-  while (i < clean.length) {
+  while (i < clean.length && idx < MAX_CHUNKS) {
     const end = Math.min(i + size, clean.length);
     let slice = clean.slice(i, end);
 
@@ -73,15 +110,18 @@ export function chunkText(text: string, size = 500, overlap = 80): Chunk[] {
       if (lastBreak > size * 0.5) slice = slice.slice(0, lastBreak + 1);
     }
 
-    chunks.push({
-      index: idx++,
-      content: slice.trim(),
-      // 粗略按 1.5 字符/token 估算
-      tokenCount: Math.ceil(slice.length / 1.5),
-    });
+    const trimmed = slice.trim();
+    if (trimmed.length > 0) {
+      chunks.push({
+        index: idx++,
+        content: trimmed,
+        tokenCount: Math.ceil(trimmed.length / 1.5),
+      });
+    }
 
-    i += slice.length - overlap;
-    if (i <= 0) i = end;
+    const advance = slice.length - overlap;
+    i += advance > 0 ? advance : end - i;
   }
+
   return chunks;
 }
