@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { SettingsForm } from './form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+type Provider = 'deepseek' | 'openai' | 'custom';
+
 export default async function SettingsPage() {
   const session = await auth();
   const userId = (session!.user as { id: string }).id;
@@ -24,9 +26,10 @@ export default async function SettingsPage() {
         <CardContent>
           <SettingsForm
             defaultValues={{
-              llmProvider: (s?.llmProvider as 'deepseek' | 'openai') ?? 'deepseek',
+              llmProvider: (s?.llmProvider as Provider) ?? 'deepseek',
               modelName: s?.modelName ?? 'deepseek-chat',
               embedModelName: s?.embedModelName ?? 'text-embedding-3-small',
+              baseUrl: s?.baseUrl ?? null,
               hasKey: Boolean(s?.encryptedApiKey),
             }}
           />

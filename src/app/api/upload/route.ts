@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       provider: settings?.llmProvider ?? 'deepseek',
       apiKey,
       model: settings?.embedModelName ?? 'text-embedding-3-small',
+      baseUrl: settings?.baseUrl ?? null,
     });
 
     // 批量 embedding（每次最多 32 条以免超额）

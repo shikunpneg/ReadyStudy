@@ -73,12 +73,14 @@ export const userSettings = pgTable('user_settings', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
-  llmProvider: varchar('llm_provider', { length: 16 }).default('deepseek').notNull(), // 'deepseek' | 'openai'
+  llmProvider: varchar('llm_provider', { length: 32 }).default('deepseek').notNull(), // 'deepseek' | 'openai' | 'custom'
   encryptedApiKey: text('encrypted_api_key'),
   modelName: varchar('model_name', { length: 64 }).default('deepseek-chat').notNull(),
   embedModelName: varchar('embed_model_name', { length: 64 })
     .default('text-embedding-3-small')
     .notNull(),
+  // 自定义 Provider 时使用（OpenAI 兼容 baseURL）
+  baseUrl: text('base_url'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 

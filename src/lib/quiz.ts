@@ -14,10 +14,12 @@ import type { QuestionType } from '@/lib/db/schema';
 export async function getUserLlmOpts(userId: string): Promise<LlmOptions> {
   const [s] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
   if (!s?.encryptedApiKey) throw new Error('请先在设置页配置 API Key');
+  const provider = (s.llmProvider as 'deepseek' | 'openai' | 'custom') || 'deepseek';
   return {
-    provider: (s.llmProvider as 'deepseek' | 'openai') || 'deepseek',
+    provider,
     apiKey: decryptApiKey(s.encryptedApiKey),
-    model: s.modelName || getDefaultModel('deepseek'),
+    model: s.modelName || getDefaultModel(provider),
+    baseUrl: s.baseUrl ?? undefined,
   };
 }
 
@@ -46,6 +48,7 @@ export async function buildContext(materialId: string, query: string): Promise<s
       provider: settings?.llmProvider ?? 'deepseek',
       apiKey,
       model: settings?.embedModelName ?? 'text-embedding-3-small',
+      baseUrl: settings?.baseUrl ?? null,
     });
     const [qVec] = await embed.embed([query]);
     const items = await retrieveTopK(materialId, qVec, 6);

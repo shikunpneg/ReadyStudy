@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth, signOut } from '@/lib/auth';
 import Link from 'next/link';
-import { LayoutDashboard, BookOpen, Upload, BrainCircuit, FileQuestion, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Upload, BrainCircuit, FileQuestion, Settings, LogOut, ListChecks } from 'lucide-react';
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -11,6 +11,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/materials', label: '我的资料', icon: BookOpen },
     { href: '/upload', label: '上传资料', icon: Upload },
+    { href: '/quiz', label: '答题', icon: ListChecks },
     { href: '/wrong-questions', label: '错题本', icon: FileQuestion },
     { href: '/settings', label: '设置', icon: Settings },
   ];
