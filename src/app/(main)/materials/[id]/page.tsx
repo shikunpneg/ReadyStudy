@@ -7,6 +7,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { BackLink } from '@/components/breadcrumb';
 import { BookOpen, BrainCircuit, FileQuestion, PencilLine } from 'lucide-react';
 
 export default async function MaterialDetailPage({
@@ -28,6 +29,7 @@ export default async function MaterialDetailPage({
 
   return (
     <div className="space-y-4">
+      <BackLink href="/materials" label="返回资料列表" />
       <div>
         <h1 className="text-2xl font-semibold">{mat.title}</h1>
         <p className="text-sm text-muted-foreground">

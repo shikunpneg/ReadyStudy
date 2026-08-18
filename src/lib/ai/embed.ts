@@ -1,7 +1,8 @@
 /**
  * Embedding 抽象。
- * - 支持 OpenAI 兼容协议（包括自定义服务）
- * - 无 key 时降级为零向量（关键词检索兜底）
+ * - 自动根据 provider 选择 baseURL（修复之前 deepseek provider 配 OpenAI 模型导致 404 的问题）
+ * - 支持 OpenAI 兼容协议
+ * - 无 key / 调用失败时降级为零向量（关键词检索兜底）
  */
 import OpenAI from 'openai';
 
@@ -9,17 +10,25 @@ export interface EmbeddingProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
 
+const PROVIDER_BASE_URL: Record<string, string> = {
+  deepseek: 'https://api.deepseek.com/v1',
+  openai: 'https://api.openai.com/v1',
+  custom: '', // 由用户填的 baseUrl 覆盖
+};
+
 class OpenAIEmbed implements EmbeddingProvider {
   constructor(
     private apiKey: string,
     private model: string,
-    private baseUrl?: string,
+    private provider: string,
+    private customBaseUrl?: string | null,
   ) {}
   async embed(texts: string[]): Promise<number[][]> {
-    const client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: this.baseUrl,
-    });
+    const baseURL =
+      this.provider === 'custom'
+        ? this.customBaseUrl || 'https://api.openai.com/v1'
+        : PROVIDER_BASE_URL[this.provider] || 'https://api.openai.com/v1';
+    const client = new OpenAI({ apiKey: this.apiKey, baseURL });
     const res = await client.embeddings.create({ model: this.model, input: texts });
     return res.data.map((d) => d.embedding);
   }
@@ -32,7 +41,7 @@ export function getEmbedder(opts: {
   baseUrl?: string | null;
 }): EmbeddingProvider {
   if (!opts.apiKey) return new FallbackEmbed();
-  return new OpenAIEmbed(opts.apiKey, opts.model, opts.baseUrl ?? undefined);
+  return new OpenAIEmbed(opts.apiKey, opts.model, opts.provider, opts.baseUrl);
 }
 
 class FallbackEmbed implements EmbeddingProvider {

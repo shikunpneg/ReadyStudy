@@ -62,11 +62,20 @@ export function chunkText(
   size = DEFAULT_CHUNK_SIZE,
   overlap = DEFAULT_OVERLAP,
 ): Chunk[] {
-  // 1) 大幅净化文本，释放内存
+  // 1) 大幅净化文本，释放内存 + 修复 PDF 提取常见的乱码
   let clean = text
+    // 去 NUL 等控制字符（PDF 提取常见问题）
+    .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '')
+    // 去零宽字符 / BOM 残留
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // 规范化换行
     .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
     .replace(/[\t\f\v]+/g, ' ')
     .replace(/[ ]{2,}/g, ' ')
+    // 去孤立单字符（PDF 字体子集常见"字符分裂"导致的噪点）
+    // 保留 CJK 字符、标点、英文单词
+    .replace(/(\S)\n(\S)\n(\S)\n/g, '$1$2$3\n') // 合并 3 行短行（PDF 表格片段）
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 

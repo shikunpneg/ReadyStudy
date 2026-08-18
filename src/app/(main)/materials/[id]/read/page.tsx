@@ -1,10 +1,9 @@
-import { auth } from '@/lib/auth';
 import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, chunks, notes } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+import { BackLink } from '@/components/breadcrumb';
 import { ReaderClient } from './client';
 
 export default async function ReadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +27,8 @@ export default async function ReadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{mat.title}</h1>
+      <BackLink href={`/materials/${id}`} label="返回资料详情" />
+      <h1 className="text-2xl font-semibold">{mat.title} · 阅读</h1>
       <ReaderClient
         materialId={id}
         chunks={sorted.map((c) => ({ id: c.id, index: c.chunkIndex, content: c.content }))}

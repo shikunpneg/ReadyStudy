@@ -1,10 +1,10 @@
-import { auth } from '@/lib/auth';
 import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, notes } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackLink } from '@/components/breadcrumb';
 
 export default async function NotesPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -22,6 +22,7 @@ export default async function NotesPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-4">
+      <BackLink href={`/materials/${id}`} label="返回资料详情" />
       <h1 className="text-2xl font-semibold">{mat.title} · 笔记</h1>
       {list.length === 0 ? (
         <p className="text-sm text-muted-foreground">

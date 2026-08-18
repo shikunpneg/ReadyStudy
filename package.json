@@ -47,6 +47,7 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "npm:pdf-parse-debugging-disabled@^1.1.1",
     "pdf-parse-debugging-disabled": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.0",

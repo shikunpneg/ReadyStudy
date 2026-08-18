@@ -1,4 +1,3 @@
-import { auth } from '@/lib/auth';
 import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, questions } from '@/lib/db/schema';
@@ -7,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { QuizClient } from './client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { BackLink } from '@/components/breadcrumb';
 import Link from 'next/link';
 
 export default async function QuizPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +25,7 @@ export default async function QuizPage({ params }: { params: Promise<{ id: strin
   if (list.length === 0) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
+        <BackLink href={`/materials/${id}`} label="返回资料详情" />
         <h1 className="text-2xl font-semibold">{mat.title} · 出题</h1>
         <Card>
           <CardHeader>
@@ -46,6 +47,7 @@ export default async function QuizPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-4">
+      <BackLink href={`/materials/${id}`} label="返回资料详情" />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{mat.title} · 答题</h1>
         <div className="flex gap-2">

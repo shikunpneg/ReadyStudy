@@ -1,4 +1,3 @@
-import { auth } from '@/lib/auth';
 import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials } from '@/lib/db/schema';
@@ -6,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { GenerateForm } from './form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { BackLink } from '@/components/breadcrumb';
 
 export default async function GeneratePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -16,6 +16,7 @@ export default async function GeneratePage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
+      <BackLink href={`/materials/${id}/quiz`} label="返回答题" />
       <h1 className="text-2xl font-semibold">{mat.title} · 出题</h1>
       <Card>
         <CardHeader>

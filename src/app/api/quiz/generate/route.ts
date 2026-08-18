@@ -35,6 +35,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ ok: true, count: rows.length, questions: rows });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    const err = e as Error;
+    console.error('[api/quiz/generate] failed:', err.message, err.stack);
+    return NextResponse.json({ error: err.message || '生成失败' }, { status: 500 });
   }
 }

@@ -1,9 +1,9 @@
-import { auth } from '@/lib/auth';
 import { requireUser } from '@/lib/guards';
 import { db } from '@/lib/db';
 import { materials, mindmaps, chunks } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
+import { BackLink } from '@/components/breadcrumb';
 import { MindmapClient } from './client';
 
 interface TreeNode {
@@ -24,6 +24,7 @@ export default async function MindmapPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-4">
+      <BackLink href={`/materials/${id}`} label="返回资料详情" />
       <h1 className="text-2xl font-semibold">{mat.title} · 知识导图</h1>
       <MindmapClient
         materialId={id}

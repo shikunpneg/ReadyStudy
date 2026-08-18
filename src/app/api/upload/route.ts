@@ -182,11 +182,12 @@ export async function POST(req: Request) {
       chunkCount: finalChunks.length,
     });
   } catch (e) {
+    const err = e as Error;
     await db
       .update(materials)
-      .set({ status: 'failed', errorMsg: (e as Error).message })
+      .set({ status: 'failed', errorMsg: err.message })
       .where(eq(materials.id, mat.id));
-    console.error('[upload] failed:', (e as Error).message);
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    console.error('[upload] failed:', err.message, err.stack);
+    return NextResponse.json({ error: err.message || '上传失败' }, { status: 500 });
   }
 }
