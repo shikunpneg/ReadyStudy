@@ -19,6 +19,12 @@ export interface KGEntity {
   is_reference?: boolean;
   depth?: number;
   parent?: string;
+  /** 情节推进阶段（story 模式） */
+  story_stage?: number;
+  /** 论证逻辑阶段（argument 模式） */
+  arg_stage?: number;
+  /** 元节点标记 */
+  category?: string;
   related_entities: KGRelatedEntity[];
 }
 
