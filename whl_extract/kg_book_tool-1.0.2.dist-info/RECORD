@@ -1,0 +1,12 @@
+kg_book_tool-1.0.2.dist-info/licenses/LICENSE,sha256=1xazbi9Z9W1W1rYmJrxbO5kD5_96V0OG_t3LDnI-yt4,1067
+kg_core/__init__.py,sha256=ocNLNfsPBkBmuNSX6TLONR5P6cNqpdilrZdEgSwbaC4,375
+kg_core/builder.py,sha256=paoc61Wc2R-q7Jb6K3xdbGVMnHqyXeKecuxHtgLL4JY,22704
+kg_core/cli.py,sha256=nNnpruVchCOrTBCGm1RJrxHhi7E7YiYmIjQFTQXOnZM,2684
+kg_core/converters.py,sha256=gBOsFYI9dEjejnun3js1_zgyg3I_w6RUyOsQQlHZvSA,9299
+kg_core/summarizer.py,sha256=wLAzhmfZ9vEZV4u0Il2j98tGMOBWnOlSeyyn8qKbCo4,9329
+kg_core/text_cleaner.py,sha256=29ITU50L9UhnyfVDw1SNrg6FIBQ_BdO7owgWguNIs7c,3610
+kg_book_tool-1.0.2.dist-info/METADATA,sha256=O0z5PBh8zpvSlfNoBl_0F-2OFJndFNrMOo-CzqU2yUY,8945
+kg_book_tool-1.0.2.dist-info/WHEEL,sha256=aeYiig01lYGDzBgS8HxWXOg3uV61G9ijOsup-k9o1sk,91
+kg_book_tool-1.0.2.dist-info/entry_points.txt,sha256=5-5g636axRsqz4te_XuNCuwXwYSkmx4L4h7s0OMiGsQ,79
+kg_book_tool-1.0.2.dist-info/top_level.txt,sha256=IDz8itm2TR2KM-0Rk2h6oNJITTCgqm6rIs3N2TubzjM,8
+kg_book_tool-1.0.2.dist-info/RECORD,,

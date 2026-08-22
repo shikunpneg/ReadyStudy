@@ -1,0 +1,3 @@
+[console_scripts]
+kg-build = kg_core.cli:main
+kg-desktop = kg_app.desktop:main

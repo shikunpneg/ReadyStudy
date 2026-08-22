@@ -3,9 +3,17 @@
  * 移植自 fast_read_book kg_core/builder.py KnowledgeGraphBuilder
  *
  * 流程：清洗 → 章节分割 → 提取标题 → 提取参考文献 → 定义/段落 → 关系
+ * 增强：HTML 实体解码、多模式章节识别、关键词兜底实体
  */
 import type { KGData, KGEntity, KGStats } from './types';
-import { cleanText, splitChapters, extractChapterTitles, chineseToNumber } from './text';
+import {
+  cleanText,
+  splitChapters,
+  extractChapterTitles,
+  chineseToNumber,
+  decodeHtmlEntities,
+  extractKeywordEntities,
+} from './text';
 import { extractDefinition, extractParagraph, titleToEntity } from './definitions';
 import { buildRelations } from './relations';
 
@@ -24,22 +32,24 @@ export interface BuildOptions {
 export function buildKnowledgeGraph(text: string, opts: BuildOptions = {}): { data: KGData; stats: KGStats } {
   const maxEntities = opts.maxEntities ?? MAX_ENTITIES;
 
-  // 1. 清洗 + 分割章节
-  const cleaned = cleanText(text);
+  // 0. HTML 实体解码 + 清洗 + 分割章节
+  const decoded = decodeHtmlEntities(text);
+  const cleaned = cleanText(decoded);
   const chapters = splitChapters(cleaned);
   const data: KGData = {};
   const existing = new Set<string>();
 
-  // 2. 章节标题 → 实体
-  const sectionTitles = extractChapterTitles(cleaned, chapters);
+  // 2. 章节标题 → 实体（增强版：多模式）
+  const sectionHits = extractChapterTitles(cleaned, chapters);
   let newEntities = 0;
-  for (const [titleText, chNum] of Object.entries(sectionTitles)) {
+  for (const hit of sectionHits) {
     if (newEntities >= maxEntities) break;
-    const entityName = titleToEntity(titleText);
+    const entityName = titleToEntity(hit.title);
     if (existing.has(entityName)) continue;
     data[entityName] = {
       name: entityName,
-      ch_num: chNum,
+      ch_num: hit.chNum,
+      depth: hit.depth,
       weight: 0.5,
       definition: '',
       paragraph: '',
@@ -55,7 +65,29 @@ export function buildKnowledgeGraph(text: string, opts: BuildOptions = {}): { da
   const refCount = extractReferences(cleaned, chapters, data, existing, maxEntities - newEntities);
   newEntities += refCount;
 
-  // 4. 定义 + 段落
+  // 4. 若仍无实体 → 关键词兜底（高频名词短语）
+  if (newEntities === 0) {
+    const kwEntities = extractKeywordEntities(cleaned, Math.min(60, maxEntities));
+    for (const kw of kwEntities) {
+      if (existing.has(kw.name)) continue;
+      data[kw.name] = {
+        name: kw.name,
+        ch_num: kw.chNum,
+        depth: 1,
+        weight: 0.3,
+        definition: '',
+        paragraph: '',
+        summary: '',
+        is_section_title: false,
+        related_entities: [],
+      };
+      existing.add(kw.name);
+      newEntities++;
+      if (newEntities >= maxEntities) break;
+    }
+  }
+
+  // 5. 定义 + 段落
   for (const [name, info] of Object.entries(data)) {
     const chNum = info.ch_num || 1;
     const chText = chapters[chNum] || cleaned;
@@ -75,7 +107,7 @@ export function buildKnowledgeGraph(text: string, opts: BuildOptions = {}): { da
     }
   }
 
-  // 5. 关系
+  // 6. 关系
   let newRelations = 0;
   if (Object.keys(data).length > 1) {
     newRelations = buildRelations(data);
@@ -129,7 +161,7 @@ function extractReferences(
       i++;
       continue;
     }
-    if (/^(第[一二三四五六七八九十\d]+章|#{1,4} )/.test(line)) break;
+    if (/^(第[一二三四五六七八九十\d]+章|Chapter|#{1,4} )/.test(line)) break;
 
     const m = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line);
     if (m && line.length > 30) {
@@ -161,9 +193,9 @@ function extractReferences(
 
 function findChapterAt(lines: string[], idx: number): number {
   for (let i = idx; i >= 0; i--) {
-    const m = /^第([一二三四五六七八九十\d]+)章/.exec(lines[i].trim());
+    const m = /^(第([一二三四五六七八九十\d]+)章|Chapter\s+(\d+))/i.exec(lines[i].trim());
     if (m) {
-      const cn = chineseToNumber(m[1]);
+      const cn = m[2] ? chineseToNumber(m[2]) : m[3] ? parseInt(m[3], 10) : null;
       if (cn !== null) return cn;
     }
   }
