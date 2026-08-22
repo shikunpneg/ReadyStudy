@@ -227,15 +227,21 @@ export function extractKeywordEntities(text: string, max = 50): { name: string; 
     '我们', '他们', '这个', '那个', '一个', '没有', '自己', '什么', '知道', '已经',
     '可以', '但是', '因为', '所以', '如果', '还是', '就是', '不是', '时候', '这些',
     '那些', '这样', '那样', '现在', '然后', '觉得', '一样', '一起', '大家', '东西',
+    '他说', '她说', '我说', '你说', '你们', '她们', '起来', '出来', '过去', '回来',
+    '怎么', '为什么', '什么', '多少', '哪儿', '那里', '这里', '当时', '后来', '之后',
+    '以前', '同时', '有些', '很多', '一定', '真的', '只是', '可是', '而且', '或者',
+    '然后', '接着', '跟着', '再', '又', '都', '也', '却', '还', '就', '再', '没',
     'and', 'the', 'that', 'this', 'with', 'from', 'have', 'were', 'they', 'their',
+    'about', 'there', 'when', 'what', 'which', 'while', 'after', 'before', 'being',
   ]);
   for (const w of words) {
     if (stop.has(w)) continue;
     if (/^[\d\s.]+$/.test(w)) continue;
+    if (/^(他说|她说|我说|你说|起来|出来|回去|过来)$/.test(w)) continue;
     freq.set(w, (freq.get(w) ?? 0) + 1);
   }
   const sorted = [...freq.entries()]
-    .filter(([, n]) => n >= 3) // 至少出现 3 次
+    .filter(([, n]) => n >= 5) // 至少出现 5 次（提高质量）
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([name]) => ({ name, chNum: 1 }));
