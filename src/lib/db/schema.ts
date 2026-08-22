@@ -216,6 +216,21 @@ export const mindmaps = pgTable('mindmaps', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/* ========== 知识图谱（移植自 fast_read_book kg_core） ========== */
+
+export const knowledgeGraphs = pgTable('knowledge_graphs', {
+  materialId: text('material_id')
+    .primaryKey()
+    .references(() => materials.id, { onDelete: 'cascade' }),
+  /** 实体数据，key = 实体名，结构同 fast_read_book */
+  data: jsonb('data').notNull(),
+  /** 构建统计 */
+  stats: jsonb('stats').notNull(),
+  /** 原文全文（按章节组织的 Markdown，用于文本定位/阅读） */
+  fullText: text('full_text'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const notes = pgTable(
   'notes',
   {

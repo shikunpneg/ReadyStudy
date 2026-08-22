@@ -7,8 +7,13 @@ const pg = await import('pg');
 const c = new pg.default.Client({ connectionString: url });
 await c.connect();
 try {
-  await c.query("ALTER TABLE notes ADD COLUMN IF NOT EXISTS highlight_text text");
-  await c.query("ALTER TABLE notes ADD COLUMN IF NOT EXISTS kind varchar(16) DEFAULT 'free' NOT NULL");
-  console.log('OK notes');
+  await c.query(`CREATE TABLE IF NOT EXISTS knowledge_graphs (
+    material_id text PRIMARY KEY REFERENCES materials(id) ON DELETE CASCADE,
+    data jsonb NOT NULL,
+    stats jsonb NOT NULL,
+    full_text text,
+    updated_at timestamptz DEFAULT now() NOT NULL
+  )`);
+  console.log('OK kg table');
 } catch (e) { console.error('FAIL', e.message); process.exit(1); }
 finally { await c.end(); }
