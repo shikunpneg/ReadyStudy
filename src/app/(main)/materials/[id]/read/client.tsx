@@ -46,6 +46,14 @@ export function ReaderClient({
     );
   }
 
+  if (type === 'epub') {
+    return hasOriginal ? (
+      <EpubReader materialId={materialId} title={title} initialNotes={notes} />
+    ) : (
+      <FallbackReader materialId={materialId} title={title} chunks={fallbackChunks} notes={notes} />
+    );
+  }
+
   if (type === 'html' || type === 'md' || type === 'txt') {
     return hasOriginal ? (
       <HtmlLikeReader materialId={materialId} title={title} type={type} initialNotes={notes} />
@@ -55,6 +63,218 @@ export function ReaderClient({
   }
 
   return <FallbackReader materialId={materialId} title={title} chunks={fallbackChunks} notes={notes} />;
+}
+
+/* ============ EPUB 阅读器（epub.js：保留原排版 + 目录 + 翻页 + 划线） ============ */
+
+function EpubReader({
+  materialId,
+  title,
+  initialNotes,
+}: {
+  materialId: string;
+  title: string;
+  initialNotes: Note[];
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [book, setBook] = useState<any>(null);
+  const [rendition, setRendition] = useState<any>(null);
+  const [toc, setToc] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [locationLabel, setLocationLabel] = useState('');
+  const [theme, setTheme] = useState<'light' | 'sepia' | 'dark'>('light');
+  const [fontSize, setFontSize] = useState(100);
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [pendingSelection, setPendingSelection] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/materials/${materialId}/file`);
+        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+        const arrayBuffer = await res.arrayBuffer();
+        if (cancelled) return;
+
+        // 动态加载 epub.js（浏览器端）
+        const ePub = (await import('epubjs')).default;
+        const book = ePub(arrayBuffer);
+        setBook(book);
+
+        const rendition = book.renderTo(hostRef.current!, {
+          width: '100%',
+          height: '100%',
+          spread: 'none',
+          flow: 'paginated',
+        });
+        setRendition(rendition);
+        await rendition.display();
+        if (cancelled) {
+          rendition.destroy();
+          return;
+        }
+
+        // 目录
+        const nav = await book.loaded.navigation;
+        if (nav && nav.toc) setToc(nav.toc);
+
+        // 进度显示
+        rendition.on('relocated', (loc: any) => {
+          const pct = loc?.start?.percentage ?? 0;
+          const label = loc?.start?.href?.split('/').pop() ?? '';
+          setLocationLabel(`${Math.round(pct * 100)}% · ${label}`);
+        });
+
+        // 划线：捕获选区
+        rendition.on('selected', (_cfiRange: string, contents: any) => {
+          const sel = contents?.window?.getSelection?.();
+          const text = sel?.toString()?.trim?.() ?? '';
+          if (text.length > 0) setPendingSelection(text);
+        });
+
+        // 主题默认
+        rendition.themes.register('light', { body: { background: '#fff', color: '#111' } });
+        rendition.themes.register('sepia', { body: { background: '#f4ecd8', color: '#5b4636' } });
+        rendition.themes.register('dark', { body: { background: '#1f2937', color: '#e5e7eb' } });
+        rendition.themes.select('light');
+        setLoading(false);
+      } catch (e) {
+        if (cancelled) return;
+        setErr(`EPUB 加载失败：${(e as Error).message}`);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      book?.destroy?.();
+    };
+  }, [materialId]);
+
+  async function saveHighlight() {
+    if (!pendingSelection) return;
+    const note = prompt('为这段划线添加注释（可选）：', '') ?? '';
+    const r = await fetch(`/api/materials/${materialId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'highlight', highlightText: pendingSelection, content: note }),
+    });
+    if (r.ok) {
+      const j = await r.json();
+      setNotes((n) => [...n, { ...j, createdAt: new Date().toISOString() }]);
+      setPendingSelection('');
+    }
+  }
+
+  async function delNote(id: string) {
+    await fetch(`/api/materials/${materialId}/notes/${id}`, { method: 'DELETE' });
+    setNotes((n) => n.filter((x) => x.id !== id));
+  }
+
+  function goTo(href: string) {
+    if (rendition) rendition.display(href);
+  }
+
+  function applyTheme(t: 'light' | 'sepia' | 'dark') {
+    setTheme(t);
+    rendition?.themes?.select(t);
+  }
+
+  function changeFont(delta: number) {
+    const next = Math.max(80, Math.min(160, fontSize + delta));
+    setFontSize(next);
+    rendition?.themes?.fontSize?.(`${next}%`);
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 工具栏 */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card p-3 text-sm">
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => rendition?.prev()} title="上一页">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="w-24 truncate text-center text-xs">{locationLabel || '加载中…'}</span>
+          <Button size="sm" variant="outline" onClick={() => rendition?.next()} title="下一页">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => changeFont(-10)} title="减小字号">
+            A−
+          </Button>
+          <span className="text-xs">{fontSize}%</span>
+          <Button size="sm" variant="outline" onClick={() => changeFont(10)} title="增大字号">
+            A+
+          </Button>
+          <div className="mx-1 h-4 w-px bg-border" />
+          {(['light', 'sepia', 'dark'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => applyTheme(t)}
+              className={`rounded-full border px-2 py-0.5 text-xs transition ${
+                theme === t ? 'border-primary text-primary' : 'text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              {t === 'light' ? '白' : t === 'sepia' ? '纸' : '夜'}
+            </button>
+          ))}
+          <Button size="sm" variant="outline" onClick={() => setPendingSelection(window.getSelection()?.toString()?.trim() ?? pendingSelection)}>
+            <Highlighter className="mr-1 h-3.5 w-3.5" /> 划线
+          </Button>
+        </div>
+      </div>
+
+      {/* 目录抽屉 */}
+      {toc.length > 0 && (
+        <details className="rounded-md border bg-card p-2">
+          <summary className="cursor-pointer px-2 py-1 text-sm font-medium">📖 目录（{toc.length} 章）</summary>
+          <div className="mt-2 max-h-56 space-y-0.5 overflow-y-auto">
+            {toc.map((item, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(item.href)}
+                className="block w-full truncate rounded px-2 py-1 text-left text-sm hover:bg-secondary"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {pendingSelection && (
+        <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm">
+          <div className="flex-1">
+            <p className="text-xs text-yellow-800">
+              已选：「{pendingSelection.slice(0, 80)}{pendingSelection.length > 80 ? '…' : ''}」
+            </p>
+          </div>
+          <Button size="sm" onClick={saveHighlight}>
+            <Save className="mr-1 h-4 w-4" /> 保存
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setPendingSelection('')}>
+            取消
+          </Button>
+        </div>
+      )}
+
+      {/* 阅读区域 */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">EPUB 加载中…</p>
+          ) : err ? (
+            <p className="p-6 text-center text-sm text-destructive">{err}</p>
+          ) : (
+            <div ref={hostRef} className="min-h-[70vh] w-full" />
+          )}
+        </CardContent>
+      </Card>
+
+      <NotesList notes={notes} onDelete={delNote} />
+    </div>
+  );
 }
 
 /* ============ PDF 阅读器（pdf.js 浏览器渲染 + 划线） ============ */
