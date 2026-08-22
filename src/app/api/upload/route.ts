@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const type = detectType(file.name);
   if (!type) {
     return NextResponse.json(
-      { error: '不支持的文件类型。已支持：PDF / TXT / Markdown / PPTX / DOCX / EPUB / MOBI / AZW3' },
+      { error: '不支持的文件类型。已支持：PDF / TXT / Markdown / HTML / PPTX / DOCX / EPUB / MOBI / AZW3' },
       { status: 400 },
     );
   }
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
 
   // 3. 解析 + 切片 + 向量化（try 外层，错误时只回退状态）
   try {
-    const text = await parseDocument(fileBytes, type);
+    const text = await parseDocument(fileBytes, type, file.name);
     const chunkList = chunkText(text, 500, 80);
 
     if (chunkList.length === 0) {

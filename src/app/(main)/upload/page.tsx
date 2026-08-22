@@ -12,7 +12,7 @@ import { Upload, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 // PDF 服务端会自动压缩（pdf-lib），压缩后仍超限才报错
 const MAX_BYTES = 4 * 1024 * 1024; // 4MB
 
-const ACCEPTED_FORMATS = ['.pdf', '.txt', '.md', '.ppt', '.pptx', '.doc', '.docx', '.epub', '.mobi', '.azw', '.azw3'];
+const ACCEPTED_FORMATS = ['.pdf', '.txt', '.md', '.markdown', '.html', '.htm', '.xhtml', '.ppt', '.pptx', '.doc', '.docx', '.epub', '.mobi', '.azw', '.azw3', '.prc'];
 
 export default function UploadPage() {
   const router = useRouter();
@@ -93,7 +93,7 @@ export default function UploadPage() {
         <CardHeader>
           <CardTitle>上传学习资料</CardTitle>
           <CardDescription>
-            支持 <b>PDF / TXT / Markdown / PPTX / DOCX / EPUB / MOBI / AZW3</b>。
+            支持 <b>PDF / TXT / Markdown / HTML / PPTX / DOCX / EPUB / MOBI / AZW3</b>。
             单文件 ≤ {formatSize(MAX_BYTES)}，PDF 会自动服务端压缩。上传后自动解析、向量化。
           </CardDescription>
         </CardHeader>
