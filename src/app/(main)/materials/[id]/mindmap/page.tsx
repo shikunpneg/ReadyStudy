@@ -5,11 +5,7 @@ import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { BackLink } from '@/components/breadcrumb';
 import { MindmapClient } from './client';
-
-interface TreeNode {
-  title: string;
-  children?: TreeNode[];
-}
+import type { Tree } from './types';
 
 export default async function MindmapPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -28,7 +24,7 @@ export default async function MindmapPage({ params }: { params: Promise<{ id: st
       <h1 className="text-2xl font-semibold">{mat.title} · 知识导图</h1>
       <MindmapClient
         materialId={id}
-        initial={(m?.structure as unknown as { root: string; children: TreeNode[] }) ?? null}
+        initial={(m?.structure as unknown as Tree) ?? null}
         chunkCount={totalChunks.length}
       />
     </div>

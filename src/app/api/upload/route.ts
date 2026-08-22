@@ -1,20 +1,20 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { materials, chunks, userSettings } from '@/lib/db/schema';
+import { materials, chunks, userSettings, mindmaps } from '@/lib/db/schema';
 import { parseDocument, detectType, chunkText } from '@/lib/parsers';
 import { compressPdf } from '@/lib/pdf-compress';
 import { getEmbedder } from '@/lib/ai/embed';
 import { putVector } from '@/lib/vector';
+import { extractPdfOutline, extractEpubOutline, extractMarkdownOutline, extractHtmlOutline } from '@/lib/structure';
+import JSZip from 'jszip';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { eq } from 'drizzle-orm';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// Vercel Hobby plan API route body 上限 4.5MB
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
-
-// 单次最多 chunks（防 OOM）
 const MAX_CHUNKS_PER_MATERIAL = 200;
 
 export async function POST(req: Request) {
@@ -25,9 +25,7 @@ export async function POST(req: Request) {
   const contentLength = Number(req.headers.get('content-length') ?? 0);
   if (contentLength > MAX_FILE_BYTES * 1.5) {
     return NextResponse.json(
-      {
-        error: `请求过大（${Math.round(contentLength / 1024 / 1024)}MB），请将文件压缩到 4MB 以内再上传。`,
-      },
+      { error: `请求过大（${Math.round(contentLength / 1024 / 1024)}MB），请将文件压缩到 4MB 以内再上传。` },
       { status: 413 },
     );
   }
@@ -79,7 +77,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2. 落库
+  // 2. 落库（含原始文件 base64，供沉浸式阅读）
+  const fileBase64 = fileBytes.toString('base64');
   const [mat] = await db
     .insert(materials)
     .values({
@@ -87,12 +86,13 @@ export async function POST(req: Request) {
       title: title || file.name,
       type,
       blobUrl: '',
+      fileData: fileBase64,
       sizeBytes: originalSize,
       status: 'processing',
     })
     .returning();
 
-  // 3. 解析 + 切片 + 向量化（try 外层，错误时只回退状态）
+  // 3. 解析 + 切片 + 向量化
   try {
     const text = await parseDocument(fileBytes, type, file.name);
     const chunkList = chunkText(text, 500, 80);
@@ -101,11 +101,9 @@ export async function POST(req: Request) {
       throw new Error('文档解析为空，可能是不支持的格式或加密文档');
     }
 
-    // 限制最大 chunk 数
     const finalChunks = chunkList.slice(0, MAX_CHUNKS_PER_MATERIAL);
     const truncated = chunkList.length > MAX_CHUNKS_PER_MATERIAL;
 
-    // 拿用户设置
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
     const apiKey = settings?.encryptedApiKey
       ? (await import('@/lib/crypto')).decryptApiKey(settings.encryptedApiKey)
@@ -117,7 +115,6 @@ export async function POST(req: Request) {
       baseUrl: settings?.baseUrl ?? null,
     });
 
-    // 4. 批量 embedding（小批量 16，避免大 batch OOM）
     const EMBED_BATCH = 16;
     const allEmbeddings: number[][] = [];
     for (let i = 0; i < finalChunks.length; i += EMBED_BATCH) {
@@ -127,13 +124,11 @@ export async function POST(req: Request) {
         allEmbeddings.push(...embeddings);
       } catch (e) {
         console.warn(`[upload] embed batch ${i} failed:`, (e as Error).message);
-        // 用零向量占位，确保 DB 记录完整
         const dim = 1536;
         allEmbeddings.push(...batch.map(() => new Array(dim).fill(0)));
       }
     }
 
-    // 5. 批量 insert（单条 SQL，减少连接数和内存峰值）
     const chunkRows = finalChunks.map((c, i) => ({
       materialId: mat.id,
       chunkIndex: c.index,
@@ -141,12 +136,10 @@ export async function POST(req: Request) {
       tokenCount: c.tokenCount,
       kvKey: `vec:${mat.id}:${c.index}`,
     }));
-    // Drizzle pg insert 一次最多 ~1000 条，分批
     for (let i = 0; i < chunkRows.length; i += 100) {
       await db.insert(chunks).values(chunkRows.slice(i, i + 100));
     }
 
-    // 6. 向量写 KV（fire-and-forget；失败不影响主流程）
     (async () => {
       try {
         for (let i = 0; i < finalChunks.length; i++) {
@@ -160,9 +153,46 @@ export async function POST(req: Request) {
       }
     })();
 
+    // 4. 抽取原生结构（PDF outline / EPUB spine / Markdown headers / HTML h1-h6）
+    let structure: unknown = null;
+    try {
+      if (type === 'pdf') {
+        const doc = await (pdfjs as any).getDocument({
+          data: new Uint8Array(fileBytes),
+          verbosity: 0,
+          stopAtErrors: false,
+        }).promise;
+        structure = await extractPdfOutline(pdfjs, doc);
+      } else if (type === 'epub') {
+        const zip = await JSZip.loadAsync(fileBytes);
+        const containerXml = await zip.file('META-INF/container.xml')?.async('string');
+        const opfPath = containerXml?.match(/full-path="([^"]+\.opf)"/)?.[1];
+        if (opfPath) {
+          const opfXml = await zip.file(opfPath)?.async('string');
+          if (opfXml) structure = await extractEpubOutline(zip, opfXml, opfPath);
+        }
+      } else if (type === 'md') {
+        structure = extractMarkdownOutline(text);
+      } else if (type === 'html') {
+        structure = extractHtmlOutline(text);
+      }
+    } catch (e) {
+      console.warn('[upload] structure extract failed:', (e as Error).message);
+    }
+
+    if (structure) {
+      try {
+        await db.insert(mindmaps).values({
+          materialId: mat.id,
+          structure: structure as never,
+        });
+      } catch (e) {
+        console.warn('[upload] mindmap save failed:', (e as Error).message);
+      }
+    }
+
     await db.update(materials).set({ status: 'ready' }).where(eq(materials.id, mat.id));
 
-    // 7. pre-generate 完全异步，不阻塞响应
     (async () => {
       try {
         const { preGenerateCoreQuestions } = await import('@/lib/jobs');
@@ -177,6 +207,7 @@ export async function POST(req: Request) {
       materialId: mat.id,
       compressed,
       truncated,
+      hasStructure: Boolean(structure),
       originalSizeMB: +(originalSize / 1024 / 1024).toFixed(2),
       finalSizeMB: +(fileBytes.length / 1024 / 1024).toFixed(2),
       chunkCount: finalChunks.length,

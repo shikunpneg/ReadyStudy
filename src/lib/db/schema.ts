@@ -96,8 +96,9 @@ export const materials = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    type: varchar('type', { length: 16 }).notNull(), // 'pdf'|'txt'|'pptx'|'docx'
-    blobUrl: text('blob_url').notNull(),
+    type: varchar('type', { length: 32 }).notNull(), // pdf|txt|md|html|pptx|docx|epub|mobi
+    blobUrl: text('blob_url').notNull().default(''),
+    fileData: text('file_data'), // base64 编码的原始文件（≤4MB，用于沉浸式阅读）
     sizeBytes: integer('size_bytes').notNull(),
     status: varchar('status', { length: 16 }).default('uploaded').notNull(),
     // 'uploaded' | 'processing' | 'ready' | 'failed'
@@ -229,6 +230,10 @@ export const notes = pgTable(
       .references(() => materials.id, { onDelete: 'cascade' }),
     chunkId: text('chunk_id'),
     content: text('content').notNull(),
+    /** 划线笔记的原文（HTML/PDF/EPUB 用选区文本） */
+    highlightText: text('highlight_text'),
+    /** 类型：free=手写笔记，highlight=划线，annotation=批注 */
+    kind: varchar('kind', { length: 16 }).default('free').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => ({ userIdx: index('note_user_idx').on(t.userId) }),
